@@ -1,8 +1,8 @@
 <?php
 /*
 Plugin Name: Distributed Admin Theme
-Description: Custom admin theming for Designed Online.
-Version: 1.10
+Description: Custom admin theming for Distribute Digital.
+Version: 1.12
 Author: Cameron Coop
 Text Domain: distributed-admin-theme
 */
