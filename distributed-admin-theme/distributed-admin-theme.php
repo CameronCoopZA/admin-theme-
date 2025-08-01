@@ -2,7 +2,7 @@
 /*
 Plugin Name: Distributed Admin Theme
 Description: Custom admin theming for Distribute Digital.
-Version: 1.13
+Version: 1.14
 Author: Cameron Coop
 Text Domain: distributed-admin-theme
 */
