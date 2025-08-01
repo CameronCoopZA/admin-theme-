@@ -1,12 +1,15 @@
 <?php
 /*
 Plugin Name: Distributed Admin Theme
-Description: Customizes WP Admin and frontend admin bar with branding, colors, and login preview.
-Version: 1.9
-Author: Distributed Digital
+Description: Custom admin theming for Designed Online.
+Version: 1.10
+Author: Cameron Coop
+Text Domain: distributed-admin-theme
 */
 
-if (!defined('ABSPATH')) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 add_action('login_init', function() {
     if (get_option('distributed_enable_sgs_token') == '1') {
@@ -379,4 +382,117 @@ function distributed_render_login_preview() {
     <?php
     return ob_get_clean();
 }
-?>
+
+// === GitHub updater with changelog support ===
+
+add_filter( 'pre_set_site_transient_update_plugins', function ( $transient ) {
+    if ( empty( $transient->checked ) ) {
+        return $transient;
+    }
+
+    $plugin_file = plugin_basename( __FILE__ ); // distributed-admin-theme/distributed-admin-theme.php
+    $installed_data = get_file_data( __FILE__, [ 'Version' => 'Version' ] );
+    $installed_version = isset( $installed_data['Version'] ) ? $installed_data['Version'] : '0';
+
+    // GitHub repo info
+    $owner = 'CameronCoopZA';
+    $repo  = 'admin-theme-'; // your GitHub repo name
+
+    $api_url = "https://api.github.com/repos/{$owner}/{$repo}/releases/latest";
+
+    $response = wp_remote_get( $api_url, [
+        'headers' => [
+            'Accept'     => 'application/vnd.github+json',
+            'User-Agent' => 'WordPress-Updater/1.0',
+        ],
+        'timeout' => 10,
+    ] );
+
+    if ( is_wp_error( $response ) ) {
+        return $transient;
+    }
+
+    $code = wp_remote_retrieve_response_code( $response );
+    if ( 200 !== $code ) {
+        return $transient;
+    }
+
+    $body = wp_remote_retrieve_body( $response );
+    $release = json_decode( $body, true );
+    if ( empty( $release ) || empty( $release['tag_name'] ) ) {
+        return $transient;
+    }
+
+    $latest_tag = ltrim( $release['tag_name'], 'v' );
+    if ( version_compare( $installed_version, $latest_tag, '>=' ) ) {
+        return $transient; // already up to date
+    }
+
+    // Use GitHub's zipball for the tag
+    $download_url = $release['zipball_url'];
+
+    $plugin_slug = dirname( plugin_basename( __FILE__ ) );
+    $plugin_key = plugin_basename( __FILE__ );
+
+    $transient->response[ $plugin_key ] = (object) [
+        'slug'        => $plugin_slug,
+        'new_version' => $latest_tag,
+        'url'         => $release['html_url'],
+        'package'     => $download_url,
+    ];
+
+    // Store release body for later display (cache it temporarily)
+    set_transient( 'distributed_admin_theme_last_release_body', $release['body'], HOUR_IN_SECONDS );
+
+    return $transient;
+} );
+
+// Provide plugin info (including changelog) when the "View details" popup is clicked
+add_filter( 'plugins_api', function ( $res, $action, $args ) {
+    if ( 'plugin_information' !== $action ) {
+        return $res;
+    }
+
+    if ( false === strpos( $args->slug, 'distributed-admin-theme' ) ) {
+        return $res;
+    }
+
+    // Attempt to get cached release body
+    $changelog = get_transient( 'distributed_admin_theme_last_release_body' );
+    if ( false === $changelog ) {
+        // Fallback: fetch fresh
+        $owner = 'CameronCoopZA';
+        $repo  = 'admin-theme-';
+        $api_url = "https://api.github.com/repos/{$owner}/{$repo}/releases/latest";
+        $response = wp_remote_get( $api_url, [
+            'headers' => [
+                'Accept'     => 'application/vnd.github+json',
+                'User-Agent' => 'WordPress-Updater/1.0',
+            ],
+            'timeout' => 10,
+        ] );
+        if ( ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response ) ) {
+            $body = wp_remote_retrieve_body( $response );
+            $release = json_decode( $body, true );
+            if ( ! empty( $release['body'] ) ) {
+                $changelog = $release['body'];
+                set_transient( 'distributed_admin_theme_last_release_body', $changelog, HOUR_IN_SECONDS );
+            }
+        }
+    }
+
+    // Build a minimal response object so WP shows version/changelog
+    $res = new stdClass();
+    $res->name = 'Distributed Admin Theme';
+    $res->slug = 'distributed-admin-theme';
+    $res->version = ''; // WP ignores this when showing update info
+    $res->author = '<a href="https://designedonline.co.za">Designed Online</a>';
+    $res->homepage = 'https://github.com/CameronCoopZA/admin-theme-/';
+    $res->short_description = 'Custom admin theming for Designed Online.';
+    $res->sections = [
+        'changelog' => wp_kses_post( wpautop( $changelog ) ),
+    ];
+    $res->download_link = ''; // WP uses package from the update response
+
+    return $res;
+}, 10, 3 );
