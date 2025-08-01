@@ -34,12 +34,12 @@ add_action('login_init', function() {
                 echo '</p>';
                 echo '</div>';
                 
-                // ✅ Append the tagline if set
+                // Append the tagline if set
                 if (!empty($tagline)) {
                     echo '<p style="font-size: 12px;color: #ffffff;margin-top: 20px;text-align: center;">' . $tagline . '</p>';
                 }
                 
-                // ✅ Stop the form from rendering
+                // Stop the form from rendering
                 exit;
             });
         }
